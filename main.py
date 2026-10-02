@@ -1,9 +1,30 @@
 import time
 import os
+import shutil  # <-- Advanced library to isolate system files dynamically
+
+TARGET_DIR = "./system_vault" 
+QUARANTINE_DIR = "./quarantine_vault"  # <-- Isolated containment area
+
 from engine import capture_baseline, load_baseline
 from hasher import calculate_sha256
 
-TARGET_DIR = "./system_vault" 
+def quarantine_file(file_path):
+    """
+    Safely extracts a compromised or unknown file away from its home folder 
+    and locks it down into an isolated quarantine folder.
+    """
+    if not os.path.exists(QUARANTINE_DIR):
+        os.makedirs(QUARANTINE_DIR)
+        
+    file_name = os.path.basename(file_path)
+    # Give the quarantined file a unique name using a timestamp
+    destination_path = os.path.join(QUARANTINE_DIR, f"QUARANTINED_{time.strftime('%Y%m%d_%H%M%S')}_{file_name}")
+    
+    try:
+        shutil.move(file_path, destination_path)
+        print(f"[SYSTEM ACTION] Threat neutralized! File isolated to: {destination_path}")
+    except Exception as e:
+        print(f"[FAILED TO QUARANTINE] Could not relocate target: {e}")
 
 def run_integrity_scan():
     baseline = load_baseline()
@@ -23,14 +44,15 @@ def run_integrity_scan():
             if full_path in baseline:
                 if current_hash != baseline[full_path]:
                     print(f"[TAMPER DETECTED] File modified! Signature mismatch on: {full_path}")
+                    quarantine_file(full_path)  # <-- Fire defensive response!
             else:
                 print(f"[UNKNOWN ITEM] Untrusted file added to directory: {full_path}")
+                quarantine_file(full_path)  # <-- Prevent rogue execution!
                 
     for old_file in baseline:
         if old_file not in current_files:
             print(f"[REMOVAL ALERT] Baseline file has been deleted: {old_file}")
 
-# Everything below this line must be indented with 4 spaces or 1 tab!
 if __name__ == "__main__":
     if not os.path.exists(TARGET_DIR):
         os.makedirs(TARGET_DIR)
